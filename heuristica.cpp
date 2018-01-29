@@ -9,12 +9,11 @@
 #include <tr1/random>
 #define DIM 50
 #define SPACE 100
-#define NODES 32
+#define NODES 80
 
 //Definindo o tipo rota
 typedef struct Route
 {
-    int k;
     int maxCapacity;
     int ID[NODES], coordX[NODES], coordY[NODES], demand[NODES], inertia[NODES], binaryAllocation[NODES];
     double prob[NODES], cumProb[NODES];
@@ -48,15 +47,19 @@ void cumulativeProb(route *r);
 void emptyBinaryAllocation(route *r);
 void emptyRoute(route *r);
 void generateInitialSolution(route *r);
-void hSwap(route *r);
+void hLeftShift(int depth, route *r);
+void hInsert(int depth, route *r);
+void hRightShift(int depth, route *r);
+void hSwap(int depth, route *r);
 void importData(char dir[SPACE], route *r);
 
 using namespace std;
 
 main()
 {
+    system("color F3");
     route *master = new route;
-    char path[SPACE] = "C:\\Users\\pietro\\Downloads\\A-VRP\\Instancias\\A32k5_C.txt";
+    char path[SPACE] = "C:\\Users\\pietro\\Downloads\\A-VRP\\Instancias\\A80k10_C.txt";
 
     master->maxCapacity = 100;
 
@@ -65,14 +68,14 @@ main()
     calculateDistance(master);
     generateInitialSolution(master);
 
-    cout << calculateResult(master->distanceMatrix, master->currentSolution) << "\n";
+    cout << "Initial solution: " << calculateResult(master->distanceMatrix, master->currentSolution) << "\n";
 
-    int i;
-
-    for(i = 0; i <= 100000; i++)
+    while(true)
     {
-        hSwap(master);
+        hSwap(100, master);
+        hRightShift(100, master);
     }
+
 }
 
 //Importa a instancia
@@ -478,53 +481,111 @@ int calculateResult(int dist[NODES][NODES], int solution[DIM][SPACE])
     return(sum);
 }
 
-void hSwap(route *r)
+void hSwap(int depth, route *r)
 {
-    int route, node[2], nodepos[2], cursol, newsol;
+    int i, route, node[2], nodepos[2], cursol, newsol;
 
-    //Calcula a solucao atual
-    cursol = calculateResult(r->distanceMatrix, r->currentSolution);
-
-    //Seleciona uma rota que tenha pelo menos 2 clientes
-    do
+    for(i = 0; i <= depth; i++)
     {
+        //Calcula a solucao atual
+        cursol = calculateResult(r->distanceMatrix, r->currentSolution);
+
+        //Seleciona uma rota que tenha pelo menos 2 clientes
+        do
+        {
+            route = randomRoute(randomUniform(), r->currentSolution);
+        }
+        while(hLength(route, r->currentSolution) <= 3);
+
+        //Sorteia a rota e o primeiro cliente
         route = randomRoute(randomUniform(), r->currentSolution);
+        node[0] = randomNode(randomUniform(), route, r->currentSolution);
+
+        //Sorteia o segundo cliente de modo que nao seja igual ao primeiro
+        do
+        {
+            node[1] = randomNode(randomUniform(), route, r->currentSolution);
+        }
+        while(node[1] == node[0]);
+
+        //Captura a posicao dos nos
+        nodepos[0] = getNodeIndex(node[0], route, r->currentSolution);
+        nodepos[1] = getNodeIndex(node[1], route, r->currentSolution);
+
+        //Realiza o swap
+        r->currentSolution[route][nodepos[0]] = node[1];
+        r->currentSolution[route][nodepos[1]] = node[0];
+
+        //Calcula a nova solucao do problema
+        newsol = calculateResult(r->distanceMatrix, r->currentSolution);
+
+        //Caso a nova solucao seja melhor atualiza a solucao corrente e imprime a nova solucao
+        if(newsol < cursol)
+        {
+            cursol = newsol;
+            cout << "Updating best solution: " << newsol << "\n";
+        }
+        else
+        {
+            //Destroca os nos substituidos
+            r->currentSolution[route][nodepos[0]] = node[0];
+            r->currentSolution[route][nodepos[1]] = node[1];
+        }
     }
-    while(hLength(route, r->currentSolution) <= 3);
+}
 
-    //Sorteia a rota e o primeiro cliente
-    route = randomRoute(randomUniform(), r->currentSolution);
-    node[0] = randomNode(randomUniform(), route, r->currentSolution);
+void hRightShift(int depth, route *r)
+{
+    int i, j, route, last, cursol, newsol, node[SPACE];
 
-    //Sorteia o segundo cliente de modo que nao seja igual ao primeiro
-    do
+    for(i = 0; i <= depth; i++)
     {
-        node[1] = randomNode(randomUniform(), route, r->currentSolution);
-    }
-    while(node[1] == node[0]);
+        //Calcula a solucao atual
+        cursol = calculateResult(r->distanceMatrix, r->currentSolution);
 
-    //Captura a posicao dos nos
-    nodepos[0] = getNodeIndex(node[0], route, r->currentSolution);
-    nodepos[1] = getNodeIndex(node[1], route, r->currentSolution);
+        //Seleciona uma rota que tenha pelo menos 3 clientes
+        do
+        {
+            route = randomRoute(randomUniform(), r->currentSolution);
+        }
+        while(hLength(route, r->currentSolution) <= 4);
 
-    //Realiza o swap
-    r->currentSolution[route][nodepos[0]] = node[1];
-    r->currentSolution[route][nodepos[1]] = node[0];
+        //Sorteia a rota e o primeiro cliente
+        route = randomRoute(randomUniform(), r->currentSolution);
 
-    //Calcula a nova solucao do problema
-    newsol = calculateResult(r->distanceMatrix, r->currentSolution);
+        for(j = 1; j <= hLength(route, r->currentSolution) - 2; j++)
+        {
+            node[j-1] = r->currentSolution[route][j];
+        }
 
-    //Caso a nova solucao seja melhor atualiza a solucao corrente e imprime a nova solucao
-    if(newsol < cursol)
-    {
-        cursol = newsol;
-        cout << newsol << "\n";
-    }
-    else
-    {
-        //Destroca os nos substituidos
-        r->currentSolution[route][nodepos[0]] = node[0];
-        r->currentSolution[route][nodepos[1]] = node[1];
+        //Realiza o right shift
+        last = r->currentSolution[route][hLength(route, r->currentSolution)-2];
+
+        for(j = hLength(route, r->currentSolution) - 2; j >= 2; j--)
+        {
+            r->currentSolution[route][j] = r->currentSolution[route][j-1];
+        }
+
+        r->currentSolution[route][1] = last;
+
+        //Calcula a nova solucao do problema
+        newsol = calculateResult(r->distanceMatrix, r->currentSolution);
+
+        //Caso a nova solucao seja melhor atualiza a solucao corrente e imprime a nova solucao
+        if(newsol < cursol)
+        {
+            cursol = newsol;
+            cout << "Updating best solution: " << newsol << "\n";
+        }
+        else
+        {
+            //Destroca os nos substituidos
+            for(j = 1; j <= hLength(route, r->currentSolution) - 2; j++)
+            {
+                r->currentSolution[route][j] = node[j-1];
+                node[j-1] = 0;
+            }
+        }
     }
 }
 
