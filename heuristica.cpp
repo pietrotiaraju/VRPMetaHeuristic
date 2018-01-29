@@ -29,11 +29,15 @@ bool checkFeasibility(int capacity, int demand[NODES], int solution[DIM][SPACE])
 double randomUniform();
 
 //Int list
-int allocatedCustomers(int binary[NODES]);
-int generateInitialNode(double random, double vec[NODES]);
+int calculateResult(int dist[NODES][NODES], int solution[DIM][SPACE]);
+int checkBinaryAllocation(int binary[NODES]);
+int generateInitialNode(double random, double cumprob[NODES]);
 int getNearestDistance(int id, int dist[NODES][NODES], int binary[NODES]);
 int getNearestNode(int id, int dist[NODES][NODES], int binary[NODES]);
+int getNodeIndex(int node, int route, int solution[DIM][SPACE]);
 int hLength(int x, int matrix[DIM][SPACE]);
+int randomNode(double random, int route, int solution[DIM][SPACE]);
+int randomRoute(double random, int solution[DIM][SPACE]);
 int vLength(int matrix[DIM][SPACE]);
 
 //Void list
@@ -44,6 +48,7 @@ void cumulativeProb(route *r);
 void emptyBinaryAllocation(route *r);
 void emptyRoute(route *r);
 void generateInitialSolution(route *r);
+void hSwap(route *r);
 void importData(char dir[SPACE], route *r);
 
 using namespace std;
@@ -60,19 +65,14 @@ main()
     calculateDistance(master);
     generateInitialSolution(master);
 
-    int i, j;
+    cout << calculateResult(master->distanceMatrix, master->currentSolution) << "\n";
 
-    for(i = 0; i <= NODES - 1; i++)
+    int i;
+
+    for(i = 0; i <= 100000; i++)
     {
-        for(j = 0; j <= NODES - 1; j++)
-        {
-            cout << master->currentSolution[i][j] << " ";
-        }
-
-        cout << "\n";
+        hSwap(master);
     }
-
-    cout << checkFeasibility(master->maxCapacity, master->demand, master->currentSolution);
 }
 
 //Importa a instancia
@@ -137,7 +137,7 @@ int vLength(int matrix[DIM][SPACE])
 }
 
 //Calcula quantas posicoes alocadas no binary tem
-int allocatedCustomers(int binary[NODES])
+int checkBinaryAllocation(int binary[NODES])
 {
     int i;
     int sum = 0;
@@ -255,7 +255,7 @@ int getNearestNode(int id, int dist[NODES][NODES], int binary[NODES])
 
     minID = 1000000;
 
-    if(allocatedCustomers(binary) <= NODES - 1)
+    if(checkBinaryAllocation(binary) <= NODES - 1)
     {
         for(i = 0; i <= NODES - 1; i++)
         {
@@ -280,7 +280,7 @@ int getNearestDistance(int id, int dist[NODES][NODES], int binary[NODES])
 
     minID = 1000000;
 
-    if(allocatedCustomers(binary) <= NODES - 1)
+    if(checkBinaryAllocation(binary) <= NODES - 1)
     {
         for(i = 0; i <= NODES - 1; i++)
         {
@@ -303,13 +303,13 @@ void generateInitialSolution(route *r)
 {
     //Seta os contadores para zero e inicia o procedimento de construcao
     int i = 0, j = 1, k;
-    int randomNode, nextNode, dist1, dist2;
+    int randomNode, nextNode, dist[2];
     int currentCapacity = r->maxCapacity;
 
     emptyBinaryAllocation(r);
     r->binaryAllocation[0] = 1;
 
-    while(allocatedCustomers(r->binaryAllocation) <= NODES - 1)
+    while(checkBinaryAllocation(r->binaryAllocation) <= NODES - 1)
     {
         //Atualiza os dados
         calculateInertia(r);
@@ -377,10 +377,10 @@ void generateInitialSolution(route *r)
             if(hLength(i, r->currentSolution) >= 3)
             {
                 //Pega o no mais proximo do anteriormente sorteado
-                dist1 = getNearestDistance(r->currentSolution[i][1], r->distanceMatrix, r->binaryAllocation);
-                dist2 = getNearestDistance(r->currentSolution[i][hLength(i, r->currentSolution) - 1], r->distanceMatrix, r->binaryAllocation);
+                dist[0] = getNearestDistance(r->currentSolution[i][1], r->distanceMatrix, r->binaryAllocation);
+                dist[1] = getNearestDistance(r->currentSolution[i][hLength(i, r->currentSolution) - 1], r->distanceMatrix, r->binaryAllocation);
 
-                if(dist1 >= dist2)
+                if(dist[0] <= dist[1])
                 {
                     nextNode = getNearestNode(r->currentSolution[i][1], r->distanceMatrix, r->binaryAllocation);
                 }
@@ -394,7 +394,7 @@ void generateInitialSolution(route *r)
 
                 if(currentCapacity >= 0)
                 {
-                    if(dist1 >= dist2)
+                    if(dist[0] >= dist[1])
                     {
                         //Pluga o no sorteado na proxima posicao da rota
                         r->currentSolution[i][hLength(i, r->currentSolution)] = nextNode;
@@ -451,6 +451,7 @@ bool checkFeasibility(int capacity, int demand[NODES], int solution[DIM][SPACE])
         {
             testCapacity[i] = testCapacity[i] - demand[solution[i][j]-1];
         }
+
          if(testCapacity[i] < 0)
         {
             return(false);
@@ -458,4 +459,145 @@ bool checkFeasibility(int capacity, int demand[NODES], int solution[DIM][SPACE])
     }
 
     return(true);
+}
+
+int calculateResult(int dist[NODES][NODES], int solution[DIM][SPACE])
+{
+    int i, j, sum;
+
+    sum = 0;
+
+    for(i = 0; i <= vLength(solution) - 1; i++)
+    {
+        for(j = 0; j <= hLength(i, solution) - 2; j++)
+        {
+            sum += dist[solution[i][j]-1][solution[i][j+1]-1];
+        }
+    }
+
+    return(sum);
+}
+
+void hSwap(route *r)
+{
+    int route, node[2], nodepos[2], cursol, newsol;
+
+    //Calcula a solucao atual
+    cursol = calculateResult(r->distanceMatrix, r->currentSolution);
+
+    //Seleciona uma rota que tenha pelo menos 2 clientes
+    do
+    {
+        route = randomRoute(randomUniform(), r->currentSolution);
+    }
+    while(hLength(route, r->currentSolution) <= 3);
+
+    //Sorteia a rota e o primeiro cliente
+    route = randomRoute(randomUniform(), r->currentSolution);
+    node[0] = randomNode(randomUniform(), route, r->currentSolution);
+
+    //Sorteia o segundo cliente de modo que nao seja igual ao primeiro
+    do
+    {
+        node[1] = randomNode(randomUniform(), route, r->currentSolution);
+    }
+    while(node[1] == node[0]);
+
+    //Captura a posicao dos nos
+    nodepos[0] = getNodeIndex(node[0], route, r->currentSolution);
+    nodepos[1] = getNodeIndex(node[1], route, r->currentSolution);
+
+    //Realiza o swap
+    r->currentSolution[route][nodepos[0]] = node[1];
+    r->currentSolution[route][nodepos[1]] = node[0];
+
+    //Calcula a nova solucao do problema
+    newsol = calculateResult(r->distanceMatrix, r->currentSolution);
+
+    //Caso a nova solucao seja melhor atualiza a solucao corrente e imprime a nova solucao
+    if(newsol < cursol)
+    {
+        cursol = newsol;
+        cout << newsol << "\n";
+    }
+    else
+    {
+        //Destroca os nos substituidos
+        r->currentSolution[route][nodepos[0]] = node[0];
+        r->currentSolution[route][nodepos[1]] = node[1];
+    }
+}
+
+int randomRoute(double random, int solution[DIM][SPACE])
+{
+    int i, route;
+    double cumprob[vLength(solution)];
+    double solsize;
+
+    solsize = vLength(solution);
+
+    for(i = 0; i <= vLength(solution) - 1; i++)
+    {
+        cumprob[i] = 0;
+    }
+
+    for(i = 0; i <= vLength(solution) - 1; i++)
+    {
+        cumprob[i+1] = cumprob[i] + 1/solsize;
+    }
+
+    for(i = 0; i <= vLength(solution) - 1; i++)
+    {
+        if(random >= cumprob[i] && random < cumprob[i+1])
+        {
+            route = i;
+        }
+    }
+
+    return(route);
+}
+
+int randomNode(double random, int route, int solution[DIM][SPACE])
+{
+    int i, node;
+    double cumprob[hLength(route, solution)-2];
+    double solsize;
+
+    solsize = hLength(route, solution) - 2;
+
+    for(i = 1; i <= hLength(route, solution) - 2; i++)
+    {
+        cumprob[i] = 0;
+    }
+
+    for(i = 1; i <= hLength(route, solution) - 2; i++)
+    {
+        cumprob[i+1] = cumprob[i] + 1/solsize;
+    }
+
+    for(i = 1; i <= hLength(route, solution) - 2; i++)
+    {
+        if(random >= cumprob[i] && random < cumprob[i+1])
+        {
+            node = solution[route][i];
+        }
+    }
+
+    return(node);
+}
+
+int getNodeIndex(int node, int route, int solution[DIM][SPACE])
+{
+    int i, j;
+
+    for(i = 0; i <= vLength(solution) - 1; i++)
+    {
+        for(j = 0; j <= hLength(route, solution) - 1; j++)
+        {
+            if(node == solution[i][j])
+            {
+                return(j);
+            }
+        }
+    }
 }
