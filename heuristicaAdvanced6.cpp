@@ -7,9 +7,9 @@
 #include <chrono>
 #include <random>
 #include <tr1/random>
-#define DIM 50
+#define DIM 100
 #define SPACE 100
-#define NODES 101
+#define NODES 459
 #define uBestEqualsCurrent 0
 #define uCurrentEqualsBest 1
 #define uDisturbanceEqualsCurrent 2
@@ -87,10 +87,10 @@ main()
     system("pause");
 
     route *master = new route;
-    char path[SPACE] = "C:\\Users\\pietro\\Downloads\\A-VRP\\Instancias\\X101k25_C.txt";
+    char path[SPACE] = "C:\\Users\\pietro\\Downloads\\A-VRP\\Instancias\\X459k26_C.txt";
     bool echo = 0;
     int depth = 100;
-    master->maxCapacity = 206;
+    master->maxCapacity = 1106;
 
     emptyBestRoute(master);
     emptyCurrentRoute(master);
